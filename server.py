@@ -10,6 +10,7 @@ import proxy
 import logging
 from recordingsession import RecordingSession
 from tempfile import TemporaryDirectory
+from segments import RawTrack
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -23,7 +24,7 @@ sio.attach(app)
 tmpdir = TemporaryDirectory()
 tmp_directory = tmpdir.name
 music_xml_path = None
-os.mkfifo(f"{tmp_directory}/tmppipe", mode=666)
+os.mkfifo(f"{tmp_directory}/tmppipe", 0o666)
 audio_pipe_path = f"{tmp_directory}/tmppipe"
 session = RecordingSession(BLOBLEN, SYNCDELAY, audio_pipe_path)
 
@@ -68,23 +69,24 @@ async def offer(request):
     params = await request.json()
     offer = RTCSessionDescription(sdp=params["sdp"], type=params["type"])
     pc = RTCPeerConnection()
-    shutdown = mp.Event()
-    proc = mp.Process(target=proxy.server, args=(shutdown, audio_pipe_path))
-    proc.daemon = True
-    proc.start()
-    print("1")
-    session.setup_zmq()
-    print("2")
-    player = MediaPlayer(audio_pipe_path, format="wav")
-    print("3")
+    # shutdown = mp.Event()
+    # proc = mp.Process(target=proxy.server, args=(shutdown, audio_pipe_path))
+    # proc.daemon = True
+    # proc.start()
+    # print("1")
+    # session.setup_zmq()
+    # print("2")
+    # player = MediaPlayer(audio_pipe_path, format="wav")
+    # print("3")
     #player = MediaPlayer("demo-instruct.wav")
+    pp = RawTrack(session)
     # if write_audio:
     #     recorder = MediaRecorder(args.write_audio)
     @pc.on("track")
     def on_track(track):
         print(f"Streaming a {track.kind} track...")
         if track.kind == "audio":
-            pc.addTrack(player.audio)
+            pc.addTrack(pp)
             # recorder.addTrack(track)
         elif track.kind == "video":
             raise RuntimeError("No Video :(")

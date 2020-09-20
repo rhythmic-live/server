@@ -1,7 +1,11 @@
 import numpy as np
 import zmq
 
-# from pydub import AudioSegment
+from queue import Queue
+
+from pydub import AudioSegment
+import tempfile
+import os
 
 # sound1 = AudioSegment.from_file("/Users/elizabethxu/Desktop/REVERSE_CantinaBand3.wav")
 # sound2 = AudioSegment.from_file("/Users/elizabethxu/Desktop/CantinaBand3.wav")
@@ -12,7 +16,6 @@ import zmq
 
 # combined.export("mixedbetter.wav", format='wav')
 
-
 class RecordingSession:
     WAV_SAMPLE_RATE = 22050
     
@@ -22,24 +25,27 @@ class RecordingSession:
         self.sync_delay = sync_delay # delay send to allow for synchronizaiton
         self.audio_pipe_dir = audio_pipe_dir
         self.blob_offset = sync_delay//blob_len + 1
-        self.tracks = [] # A list of dictionaries
+        self.tracks = {} # A list of dictionaries
         self.mixed = [] # Fully reconstructed audio
         self.recording = False 
         self.send_stream = False
+        self.q = Queue()
+        self.last_sent = 0
+        self.curr_audio = None
 
     def tell_segment(self, audio_buffer, blob_no, track_id):
         if self.recording:
-            while len(self.tracks) <= blob_no:
-                self.tracks.append(dict())
-            self.tracks[blob_no][track_id] = np.frombuffer(audio_buffer, dtype=np.uint8)
-            num_mixed = len(self.mixed)
-            if blob_no > num_mixed + self.blob_offset: 
-                mixed = self.combineaudio(self.tracks[num_mixed].values())
-                self.mixed.append(mixed)
-                if self.send_stream:
-                    self.socket.send(mixed.tobytes())
-                    _ = self.socket.recv()
-                # send shit into a pipe?
+            if track_id not in self.tracks:
+                self.tracks[track_id] = bytearray()
+
+            self.tracks[track_id].extend(audio_buffer)
+
+            if blob_no == 100:
+                with open('tmp.wav', 'wb') as f:
+                    f.write(self.tracks[track_id])
+                
+                a = AudioSegment.from_file('tmp.wav', format='s16le')
+                a.export('good.wav')
     
     def setup_zmq(self):
         self.context = zmq.Context()
@@ -47,13 +53,16 @@ class RecordingSession:
         self.socket.connect("ipc:///tmp/proxypipe")
     
     def __repr__(self):
-        ret = f"Blob_offset: {self.blob_offset}\n"
-        ret += f"Tracks: {self.tracks[0].keys()} as keys with {len(self.tracks)} entries\n"
-        ret += f"Mixed: {len(self.mixed)}\n"
-        return ret
+        # ret = f"Blob_offset: {self.blob_offset}\n"
+        # ret += f"Tracks: {self.tracks[0].keys()} as keys with {len(self.tracks)} entries\n"
+        # ret += f"Mixed: {len(self.mixed)}\n"
+        # return ret
+        return "fuck"
     
     @staticmethod
     def combineaudio(audios):
+        if len(audios) == 1:
+            return list(audios)[0]
         return np.mean(*audios)
     
     def start_recording(self):
