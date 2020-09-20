@@ -50,10 +50,11 @@ async def get_xml(sid, data):
 @sio.event
 async def start(sid, data):
     global session
+    print(data)
     session.dump_data(*data)
     print("Got start signal")
     session.start_recording()
-    await sio.emit("start-participants")
+    await sio.emit("start-participants", data)
 
 
 @sio.on("audio-tx")
@@ -80,10 +81,11 @@ async def stop(sid):
     print("asdf3.5")
     complete_wav_path = session.mash_audio()
     print("asdf4")
-    with open(complete_wav_path, "r") as f:
-        byte_arr = f.read()
-    print("asdf5")
-    await sio.emit("final_audio", byte_arr)
+    await sio.emit("final_audio", complete_wav_path)
+    # with open(complete_wav_path, "r") as f:
+    #     byte_arr = f.read()
+    # print("asdf5")
+    # await sio.emit("final_audio", byte_arr)
 
 
 """

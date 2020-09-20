@@ -30,12 +30,12 @@ class RecordingSession:
         print("Running konwoo's genius calculations")
         import pathlib
 
-        prefix = pathlib.Path(__file__).parent.absolute()
+        prefix = pathlib.Path(__file__).parent.absolute().as_posix()
         return [
             (
                 path,
                 analytics.analyze(
-                    mxml, func(path), start_m, end_m, tempo, prefix + path
+                    mxml, func(path), start_m, end_m, tempo, os.path.join(prefix, path)
                 ),
             )
             for path in wave_paths
@@ -54,6 +54,7 @@ class RecordingSession:
 
     def start_recording(self):
         self.recording = True
+        self.tracks = {}
 
     def finish_recording(self):
         self.recording = False
@@ -69,6 +70,6 @@ class RecordingSession:
         mapped = list(map(lambda x: AudioSegment.from_file(x), self.wav_paths))
         front = mapped[0]
         for other in mapped[1:]:
-            front.overlay(other)
-        front.export("complete.wav")
+            front = front.overlay(other)
+        front.export("../web_client/complete.wav")
         return "complete.wav"
