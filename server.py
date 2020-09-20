@@ -38,12 +38,14 @@ async def update_xml(sid, data):
     with open(music_xml_path, "w") as f:
         f.write(file)
 
+
 @sio.event
 async def get_xml(sid, data):
     global music_xml_path
     with open(music_xml_path, "r") as f:
         xml = f.read()
     await sio.emit("xml_return", xml)
+
 
 @sio.event
 async def start(sid, data):
@@ -52,6 +54,7 @@ async def start(sid, data):
     print("Got start signal")
     session.start_recording()
     await sio.emit("start-participants")
+
 
 @sio.on("audio-tx")
 async def recv_audio(sid, data):
@@ -62,16 +65,16 @@ async def recv_audio(sid, data):
     # print(f"Received audio chunk from {sid}.")
     # print(f"Length {len(audio)}, blob_no: {blob_no}, name: {name}")
 
+
 @sio.event
 async def stop(sid):
     global session
     print("asdf0")
     await asyncio.sleep(5)
-    
     print("asdf1")
-    session.finish_recording()
-    print("asdf2")
     await sio.emit("stop-participants")
+    print("asdf2")
+    session.finish_recording()
     print("asdf3")
     await sio.emit("analytics", session.run_analysis())
     print("asdf3.5")
@@ -80,7 +83,7 @@ async def stop(sid):
     with open(complete_wav_path, "r") as f:
         byte_arr = f.read()
     print("asdf5")
-    await sio.emit("Final Audio", byte_arr)
+    await sio.emit("final_audio", byte_arr)
 
 
 """
@@ -135,24 +138,29 @@ async def offer(request):
     )
 """
 
+
 async def on_shutdown(app):
     print("SHUTDOWN")
+
 
 # html pages
 
 ROOT = os.path.dirname(__file__)
 
+
 async def index(request):
     content = open(os.path.join(ROOT, "index.html"), "r").read()
     return web.Response(content_type="text/html", text=content)
 
+
 async def javascript(request):
     content = open(os.path.join(ROOT, "./static/script.js"), "r").read()
     return web.Response(content_type="application/javascript", text=content)
+
 
 if __name__ == "__main__":
     app.on_shutdown.append(on_shutdown)
     # app.router.add_post("/offer", offer)
     app.router.add_get("/", index)
     app.router.add_get("/script.js", javascript)
-    web.run_app(app, access_log=None, host='0.0.0.0', port=8081)
+    web.run_app(app, access_log=None, host="0.0.0.0", port=8081)
