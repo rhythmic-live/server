@@ -2,7 +2,7 @@ import socketio
 from aiohttp import web
 from aiortc import MediaStreamTrack, RTCPeerConnection, RTCSessionDescription
 from aiortc.contrib.media import MediaBlackhole, MediaPlayer, MediaRecorder
-import json
+import json, asyncio
 import os
 import multiprocessing as mp
 import proxy
@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.DEBUG)
 BLOBLEN = 110  # ms
 SYNCDELAY = 2000  # ms
 
-sio = socketio.AsyncServer(async_mode="aiohttp")
+sio = socketio.AsyncServer(async_mode="aiohttp", cors_allowed_origins="*")
 app = web.Application()
 sio.attach(app)
 
@@ -26,15 +26,15 @@ tmp_directory = tmpdir.name
 music_xml_path = None
 os.mkfifo(f"{tmp_directory}/tmppipe", 0o666)
 audio_pipe_path = f"{tmp_directory}/tmppipe"
-session = RecordingSession(BLOBLEN, SYNCDELAY, audio_pipe_path)
+session = RecordingSession(BLOBLEN, SYNCDELAY)
 
 
 @sio.event
 async def update_xml(sid, data):
     global tmp_directory, music_xml_path, session
     file, name = data
-    session.songname = name
     music_xml_path = f"{tmp_directory}/{name}"
+    session.mxml = music_xml_path
     with open(music_xml_path, "w") as f:
         f.write(file)
 
@@ -42,11 +42,13 @@ async def update_xml(sid, data):
 async def get_xml(sid, data):
     global music_xml_path
     with open(music_xml_path, "r") as f:
-        return f.read()
+        xml = f.read()
+    await sio.emit("xml_return", xml)
 
 @sio.event
-async def start(sid):
+async def start(sid, data):
     global session
+    session.dump_data(*data)
     print("Got start signal")
     session.start_recording()
     await sio.emit("start-participants")
@@ -54,16 +56,34 @@ async def start(sid):
 @sio.on("audio-tx")
 async def recv_audio(sid, data):
     global session
-    print(type(data))
-    print(len(data))
-    print(type(data[0]))
     audio, blob_no, name = data
     session.tell_segment(*data)
-    if blob_no > 0: print(session)
-    print(f"Received audio chunk from {sid}.")
-    print(f"Length {len(audio)}, blob_no: {blob_no}, name: {name}")
-    print(f"Preview: {audio[-100:]}")
+    # if blob_no > 0: print(session)
+    # print(f"Received audio chunk from {sid}.")
+    # print(f"Length {len(audio)}, blob_no: {blob_no}, name: {name}")
 
+@sio.event
+async def stop(sid):
+    global session
+    print("asdf0")
+    await asyncio.sleep(5)
+    
+    print("asdf1")
+    session.finish_recording()
+    print("asdf2")
+    await sio.emit("stop-participants")
+    print("asdf3")
+    await sio.emit("analytics", session.run_analysis())
+    print("asdf3.5")
+    complete_wav_path = session.mash_audio()
+    print("asdf4")
+    with open(complete_wav_path, "r") as f:
+        byte_arr = f.read()
+    print("asdf5")
+    await sio.emit("Final Audio", byte_arr)
+
+
+"""
 async def offer(request):
     global audio_pipe_path, session
     params = await request.json()
@@ -113,7 +133,7 @@ async def offer(request):
             {"sdp": pc.localDescription.sdp, "type": pc.localDescription.type}
         ),
     )
-
+"""
 
 async def on_shutdown(app):
     print("SHUTDOWN")
@@ -132,7 +152,7 @@ async def javascript(request):
 
 if __name__ == "__main__":
     app.on_shutdown.append(on_shutdown)
-    app.router.add_post("/offer", offer)
+    # app.router.add_post("/offer", offer)
     app.router.add_get("/", index)
     app.router.add_get("/script.js", javascript)
     web.run_app(app, access_log=None, host='0.0.0.0', port=8081)
