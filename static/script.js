@@ -1,4 +1,4 @@
-SOCKET_ADDR = 'http://localhost:8080';
+SOCKET_ADDR = 'http://localhost:8081';
 
 socket = io.connect(SOCKET_ADDR);
 
@@ -43,7 +43,12 @@ var pc = null;
 
 
 function createPeerConnection() {
-    pc = new RTCPeerConnection();
+    var config = {
+        sdpSemantics: 'unified-plan'
+        //iceServers: [{urls: ['stun:stun.l.google.com:19302']}]
+    }
+
+    pc = new RTCPeerConnection(config);
 
     // connect audio / video
     pc.addEventListener('track', function(evt) {
@@ -59,6 +64,7 @@ function createPeerConnection() {
 
 function negotiate() {
     return pc.createOffer().then(function(offer) {
+        console.log("offer created...");
         return pc.setLocalDescription(offer);
     }).then(function() {
         // wait for ICE gathering to complete
@@ -67,16 +73,19 @@ function negotiate() {
                 resolve();
             } else {
                 function checkState() {
+                    console.log('event listener called...');
                     if (pc.iceGatheringState === 'complete') {
                         pc.removeEventListener('icegatheringstatechange', checkState);
                         resolve();
                     }
                 }
                 pc.addEventListener('icegatheringstatechange', checkState);
+                console.log('event listener installed...');
             }
         });
     }).then(function() {
         var offer = pc.localDescription;
+        console.log(offer);
         return fetch('/offer', {
             body: JSON.stringify({
                 sdp: offer.sdp,
@@ -90,7 +99,7 @@ function negotiate() {
     }).then(function(response) {
         return response.json();
     }).then(function(answer) {
-        document.getElementById('answer-sdp').textContent = answer.sdp;
+        //document.getElementById('answer-sdp').textContent = answer.sdp;
         return pc.setRemoteDescription(answer);
     }).catch(function(e) {
         alert(e);
@@ -100,9 +109,13 @@ function negotiate() {
 
 
 function getConductor(){
+    console.log("creating peer connection");
     pc = createPeerConnection();
 
     var constraints = {audio: true, video: false};
+
+    console.log("negotiating...");
+    // negotiate();
 
     navigator.mediaDevices.getUserMedia(constraints).then(function(stream) {
         stream.getTracks().forEach(function(track) {

@@ -1,4 +1,5 @@
 import numpy as np
+import zmq
 
 # from pydub import AudioSegment
 
@@ -36,9 +37,14 @@ class RecordingSession:
                 mixed = self.combineaudio(self.tracks[num_mixed].values())
                 self.mixed.append(mixed)
                 if self.send_stream:
-                    with open(self.audio_pipe_dir, "w") as pipe:
-                        pipe.write(mixed.tobytes())
+                    self.socket.send(mixed.tobytes())
+                    _ = self.socket.recv()
                 # send shit into a pipe?
+    
+    def setup_zmq(self):
+        self.context = zmq.Context()
+        self.socket = self.context.socket(zmq.REQ)
+        self.socket.connect("ipc:///tmp/proxypipe")
     
     def __repr__(self):
         ret = f"Blob_offset: {self.blob_offset}\n"

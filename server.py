@@ -4,6 +4,8 @@ from aiortc import MediaStreamTrack, RTCPeerConnection, RTCSessionDescription
 from aiortc.contrib.media import MediaBlackhole, MediaPlayer, MediaRecorder
 import json
 import os
+import multiprocessing as mp
+import proxy
 
 import logging
 from recordingsession import RecordingSession
@@ -21,7 +23,7 @@ sio.attach(app)
 tmpdir = TemporaryDirectory()
 tmp_directory = tmpdir.name
 music_xml_path = None
-os.mkfifo(f"{tmp_directory}/tmppipe")
+os.mkfifo(f"{tmp_directory}/tmppipe", mode=666)
 audio_pipe_path = f"{tmp_directory}/tmppipe"
 session = RecordingSession(BLOBLEN, SYNCDELAY, audio_pipe_path)
 
@@ -66,7 +68,16 @@ async def offer(request):
     params = await request.json()
     offer = RTCSessionDescription(sdp=params["sdp"], type=params["type"])
     pc = RTCPeerConnection()
-    player = MediaPlayer(audio_pipe_path)
+    shutdown = mp.Event()
+    proc = mp.Process(target=proxy.server, args=(shutdown, audio_pipe_path))
+    proc.daemon = True
+    proc.start()
+    print("1")
+    session.setup_zmq()
+    print("2")
+    player = MediaPlayer(audio_pipe_path, format="wav")
+    print("3")
+    #player = MediaPlayer("demo-instruct.wav")
     # if write_audio:
     #     recorder = MediaRecorder(args.write_audio)
     @pc.on("track")
@@ -91,8 +102,8 @@ async def offer(request):
     answer = await pc.createAnswer()
     await pc.setLocalDescription(answer)
 
-    # Tell music session to start writing to pipe???
-    session.send_stream = True
+    # Tell music session to start writing to pipe
+    # session.send_stream = True
     
     return web.Response(
         content_type="application/json",
@@ -122,4 +133,4 @@ if __name__ == "__main__":
     app.router.add_post("/offer", offer)
     app.router.add_get("/", index)
     app.router.add_get("/script.js", javascript)
-    web.run_app(app, access_log=None)
+    web.run_app(app, access_log=None, host='0.0.0.0', port=8081)
